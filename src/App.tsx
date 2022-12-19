@@ -10,6 +10,15 @@ import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutline
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import { PoolInfo } from './util/types';
 import { saveAs } from 'file-saver';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { BN } from '@polkadot/util';
+import LoadingButton from '@mui/lab/LoadingButton';
+import PoolIcon from '@mui/icons-material/Pool';
+
+import dayjs, { Dayjs } from 'dayjs';
+import useApi from './hooks/useApi';
 
 const DEFAULT_FILTERS = {
   hasMetadata: false,
@@ -23,14 +32,49 @@ const DEFAULT_FILTERS = {
   }
 }
 
+const endpoint = 'wss://polkadot-rpc.dwellir.com: '; //'wss://polkadot.api.onfinality.io/public-ws: ';
+const BLOCK_SPACE = 6; // sec
+
 function App() {
-  const pools = usePools();
+  const api = useApi(endpoint);
+  const [blockToFetchAt, setBlockToFetchAt] = React.useState<BN>();
+  const [isLoading, setIsLoading] = React.useState<boolean>(false);
+  const [waitingForPools, setWaiting] = React.useState<boolean>(false);
+  const pools = usePools(endpoint, blockToFetchAt, isLoading, setIsLoading);
   const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
   const [memberLimit, setMemberLimit] = React.useState(10);
   const [filteredPools, setFilteredPools] = React.useState<PoolInfo[] | null | undefined>(pools);
+  const [currentBlockNumber, setCurrentBlockNumber] = React.useState<BN>();
+  const [pickedDate, setDate] = React.useState<Dayjs | null>(
+    dayjs(Date.now()),
+  );
 
-  console.log('pools:', pools);
-  console.log('memberLimit:', memberLimit);
+  React.useEffect(() => {
+    api && api.rpc.chain.getHeader().then((h) => setCurrentBlockNumber(h.number.unwrap()))
+  }, [api]);
+
+  React.useEffect(() => {
+    pools && setWaiting(false)
+  }, [pools]);
+
+  React.useEffect(() => {
+    if (!currentBlockNumber) {
+      return;
+    }
+    const diff = Math.floor((Date.now() - dayjs(pickedDate).valueOf()) / (BLOCK_SPACE * 1000));
+    setBlockToFetchAt(currentBlockNumber.subn(diff))
+  }, [currentBlockNumber, pickedDate]);
+
+  console.log(`get pools info for block number: ${blockToFetchAt}`);
+
+  const handleChange = (newValue: Dayjs | null) => {
+    setDate(newValue);
+  }
+
+  const onGo = React.useCallback(() => {
+    !isLoading && setIsLoading(true);
+    setWaiting(true);
+  }, [isLoading]);
 
   React.useEffect(() => {
     let filtered = filters.hasMetadata ? pools?.filter((pool) => pool.metadata) : pools;
@@ -39,7 +83,7 @@ function App() {
     filtered = filters.isOpen ? filtered?.filter((pool) => pool.bondedPool.state) : filtered;
     filtered = filters.hasMoreThanXMembers.check ? filtered?.filter((pool) => pool.bondedPool.memberCounter > memberLimit) : filtered;
 
-    filtered?.length && setFilteredPools(filtered?.length ? [...filtered] : []);
+    setFilteredPools(filtered?.length ? [...filtered] : []);
   }, [filters, memberLimit, pools]);
 
   const onFilters = React.useCallback((filter: keyof typeof DEFAULT_FILTERS) => {
@@ -66,6 +110,33 @@ function App() {
         <Typography variant='h5' sx={{ fontWeight: '500' }}>
           Polkadot Pools Filtering
         </Typography>
+      </Grid>
+      <Grid container item alignItems='center' justifyContent='center' pt='30px' pb='10px'>
+        <Typography variant='h6' sx={{ fontWeight: '500', mr: '10px' }}>
+          Pick a date and time to get pools information at that moment:
+        </Typography>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DateTimePicker
+            // label="Pick a Date & Time"
+            minDateTime={dayjs('2022-10-31 23:31:12 (+UTC)')}
+            maxDateTime={dayjs(Date.now())}
+            value={pickedDate}
+            onChange={handleChange}
+            renderInput={(params) => <TextField {...params} />}
+          />
+        </LocalizationProvider>
+        <LoadingButton
+          loading={!blockToFetchAt || waitingForPools}
+          loadingPosition="start"
+          startIcon={<PoolIcon />}
+          variant="contained"
+          color='primary'
+          onClick={onGo}
+          disabled={!blockToFetchAt}
+          sx={{ py: '15px', ml: '30px', textTransform: 'none' , width:'175px'}}
+        >
+          {`Get at #${blockToFetchAt || '--------'}`}
+        </LoadingButton>
       </Grid>
       <Grid container item justifyContent='center' width='90%' sx={{ borderTop: '3px solid', borderTopColor: 'secondary.main' }}>
         <Grid container item justifyContent='center' pt='10px' pb='15px'>
@@ -149,25 +220,35 @@ function App() {
             Reset Filters
           </Grid>
           <Button
-            variant="contained"
+            variant="outlined"
+            color='secondary'
             onClick={onExport}
             disabled={!filteredPools?.length}
+            sx={{ textTransform: 'none' }}
           >
             Export {filteredPools?.length ?? ''} Reward Ids
           </Button>
         </Grid>
         {!filteredPools
           ?
-          <Grid container alignItems='center' justifyContent='center' pb='5px' mb='5px' sx={{ borderTop: '2px dashed', borderColor: 'secondary.main' }}>
-            <Grid item pt='50px'>
-              <CircularProgress size={50} />
+          waitingForPools ?
+            <Grid container alignItems='center' justifyContent='center' pb='5px' mb='5px' sx={{ borderTop: '2px dashed', borderColor: 'secondary.main' }}>
+              <Grid item pt='50px'>
+                <CircularProgress size={50} />
+              </Grid>
+              <Grid item pt='50px' pl='5px'>
+                <Typography sx={{ fontWeight: '300', fontSize: '12px' }}>
+                  Loading pools ...
+                </Typography>
+              </Grid>
             </Grid>
-            <Grid item pt='50px'>
-              <Typography sx={{ fontWeight: '300', fontSize: '12px' }}>
-                Loading pools ...
-              </Typography>
+            : <Grid container alignItems='center' justifyContent='center' pb='5px' mb='5px' sx={{ borderTop: '2px dashed', borderColor: 'secondary.main' }}>
+              {/* <Grid item pt='50px'>
+                <Typography sx={{ fontWeight: '500', fontSize: '16px' }}>
+                  Select a date and hit the Go button to view the list of Polkadot pools information on that date
+                </Typography>
+              </Grid> */}
             </Grid>
-          </Grid>
           : <Grid container item justifyContent='center'>
             <>
               <Grid container alignItems='center' pb='5px' mb='5px' sx={{ borderBottom: '2px dashed', borderTop: '2px dashed', borderColor: 'secondary.main' }}>

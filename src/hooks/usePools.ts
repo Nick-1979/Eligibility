@@ -7,15 +7,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { BN } from '@polkadot/util';
 
-export default function usePools(): PoolInfo[] | null | undefined {
+export default function usePools(endpoint: string, blockToFetchAt: BN | undefined, isLoading: boolean, setIsLoading: React.Dispatch<React.SetStateAction<boolean>>): PoolInfo[] | null | undefined {
   const [pools, setPools] = useState<PoolInfo[] | undefined | null>();
-  const [isFetching, setIsFetching] = useState<boolean>();
-  const endpoint = 'wss://polkadot-rpc.dwellir.com: '; //'wss://polkadot.api.onfinality.io/public-ws: ';
 
-  const getPools = useCallback((endpoint: string) => {
+  const getPools = useCallback((endpoint: string, blockToFetchAt: BN) => {
     const getPoolsWorker: Worker = new Worker(new URL('../util/workers/getPools.js', import.meta.url));
-
-    getPoolsWorker.postMessage({ endpoint });
+    const block = String(blockToFetchAt);
+    getPoolsWorker.postMessage({ endpoint, block });
 
     getPoolsWorker.onerror = (err) => {
       console.log(err);
@@ -34,8 +32,6 @@ export default function usePools(): PoolInfo[] | null | undefined {
       const parsedPoolsInfo = JSON.parse(poolsInfo);
       const info = parsedPoolsInfo.info as PoolInfo[];
 
-      // setNextPoolId(new BN(parsedPoolsInfo.nextPoolId));
-
       info?.forEach((p: PoolInfo) => {
         if (p?.bondedPool?.points) {
           p.bondedPool.points = new BN(String(p.bondedPool.points));
@@ -51,11 +47,11 @@ export default function usePools(): PoolInfo[] | null | undefined {
   }, []);
 
   useEffect(() => {
-    if (endpoint && getPools && !isFetching) {
-      setIsFetching(true);
-      getPools(endpoint);
+    if (endpoint && getPools && isLoading && blockToFetchAt) {
+      getPools(endpoint, blockToFetchAt);
+      setIsLoading(false);
     }
-  }, [endpoint, getPools, isFetching]);
+  }, [blockToFetchAt, endpoint, getPools, isLoading, setIsLoading]);
 
   return pools;
 }

@@ -4,12 +4,16 @@
 import getApi from '../getApi.ts';
 import getPoolAccounts from '../getPoolAccounts.ts';
 
-async function getPools(endpoint) {
+async function getPools(endpoint, block) {
+  console.log(`getPools worker is called to fetch pools at block ${block}`);
   const api = await getApi(endpoint);
+  const hash=await api.rpc.chain.getBlockHash(block);
 
-  const lastPoolId = await api.query.nominationPools.lastPoolId();
+  const apiAt = await api.at(hash);
 
-  console.log(`getting pools for ${lastPoolId.toNumber()} pools`);
+  const lastPoolId = await apiAt.query.nominationPools.lastPoolId();
+
+  console.log(`getting pools info of ${lastPoolId.toNumber()} pools`);
 
   if (!lastPoolId) {
     return null;
@@ -19,9 +23,9 @@ async function getPools(endpoint) {
 
   for (let poolId = 1; poolId <= lastPoolId.toNumber(); poolId++) {
     queries.push(Promise.all([
-      api.query.nominationPools.metadata(poolId),
-      api.query.nominationPools.bondedPools(poolId),
-      api.query.nominationPools.rewardPools(poolId)
+      apiAt.query.nominationPools.metadata(poolId),
+      apiAt.query.nominationPools.bondedPools(poolId),
+      apiAt.query.nominationPools.rewardPools(poolId)
     ]));
   }
 
@@ -57,7 +61,7 @@ async function getPools(endpoint) {
   });
 
   console.log('getting pools nominators ...');
-  const nominators = await Promise.all(poolsInfo.map((pool) => api.query.staking.nominators(pool.accounts.stashId)))
+  const nominators = await Promise.all(poolsInfo.map((pool) => apiAt.query.staking.nominators(pool.accounts.stashId)))
   console.log(`${nominators?.length} nominators fetched`);
 
   poolsInfo.forEach((pool, index) => {
@@ -69,10 +73,10 @@ async function getPools(endpoint) {
 }
 
 onmessage = (e) => {
-  const { endpoint } = e.data;
+  const { endpoint, block } = e.data;
 
   // eslint-disable-next-line no-void
-  void getPools(endpoint).then((poolsInfo) => {
+  void getPools(endpoint, block).then((poolsInfo) => {
     postMessage(poolsInfo);
   });
 };
