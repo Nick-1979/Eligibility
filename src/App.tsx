@@ -66,8 +66,6 @@ function App() {
     setBlockToFetchAt(currentBlockNumber.subn(diff))
   }, [currentBlockNumber, pickedDate]);
 
-  console.log(`get pools info for block number: ${blockToFetchAt}`);
-
   const handleChange = (newValue: Dayjs | null) => {
     setDate(newValue);
   }
