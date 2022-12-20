@@ -19,6 +19,8 @@ import PoolIcon from '@mui/icons-material/Pool';
 
 import dayjs, { Dayjs } from 'dayjs';
 import useApi from './hooks/useApi';
+import { BLOCK_SPACE, ENDPOINT } from './consts';
+import ExportCalls from './ExportCalls';
 
 const DEFAULT_FILTERS = {
   hasMetadata: false,
@@ -32,19 +34,18 @@ const DEFAULT_FILTERS = {
   }
 }
 
-const endpoint = 'wss://polkadot-rpc.dwellir.com: '; //'wss://polkadot.api.onfinality.io/public-ws: ';
-const BLOCK_SPACE = 6; // sec
 
 function App() {
-  const api = useApi(endpoint);
+  const api = useApi(ENDPOINT);
   const [blockToFetchAt, setBlockToFetchAt] = React.useState<BN>();
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [waitingForPools, setWaiting] = React.useState<boolean>(false);
-  const pools = usePools(endpoint, blockToFetchAt, isLoading, setIsLoading);
+  const pools = usePools(ENDPOINT, blockToFetchAt, isLoading, setIsLoading);
   const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
   const [memberLimit, setMemberLimit] = React.useState(10);
   const [filteredPools, setFilteredPools] = React.useState<PoolInfo[] | null | undefined>(pools);
   const [currentBlockNumber, setCurrentBlockNumber] = React.useState<BN>();
+  const [rewardIds, setRewardIds] = React.useState<string[] | undefined>();
   const [pickedDate, setDate] = React.useState<Dayjs | null>(
     dayjs(Date.now()),
   );
@@ -84,6 +85,8 @@ function App() {
     filtered = filters.hasMoreThanXMembers.check ? filtered?.filter((pool) => pool.bondedPool.memberCounter > memberLimit) : filtered;
 
     setFilteredPools(filtered?.length ? [...filtered] : []);
+    const ids = filtered?.map((p) => p.accounts.rewardId);
+    setRewardIds(ids);
   }, [filters, memberLimit, pools]);
 
   const onFilters = React.useCallback((filter: keyof typeof DEFAULT_FILTERS) => {
@@ -95,14 +98,12 @@ function App() {
 
     filters[filter] = !filters[filter];
     setFilters({ ...filters });
-  }, [filters, setFilters]);
+  }, [filters]);
 
   const onExport = React.useCallback(() => {
-    const ids = filteredPools?.map((p) => p.accounts.rewardId);
-
-    var blob = new Blob([JSON.stringify(ids)], { type: "text/plain;charset=utf-8" });
+    var blob = new Blob([JSON.stringify(rewardIds)], { type: "text/plain;charset=utf-8" });
     saveAs(blob, "rewardIds.txt");
-  }, [filteredPools]);
+  }, [rewardIds]);
 
   return (
     <Grid container justifyContent='center'>
@@ -133,7 +134,7 @@ function App() {
           color='primary'
           onClick={onGo}
           disabled={!blockToFetchAt}
-          sx={{ py: '15px', ml: '30px', textTransform: 'none' , width:'175px'}}
+          sx={{ py: '15px', ml: '30px', textTransform: 'none', width: '175px' }}
         >
           {`Get at #${blockToFetchAt || '--------'}`}
         </LoadingButton>
@@ -216,18 +217,22 @@ function App() {
           </Grid>
         </Grid>
         <Grid container item alignItems='center' justifyContent='flex-end' pb='15px'>
-          <Grid item color='red' sx={{ mr: '20px', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setFilters(DEFAULT_FILTERS)}>
-            Reset Filters
-          </Grid>
           <Button
+            variant='text'
+            sx={{ mr: '20px', color: 'red', textTransform: 'none' }}
+            onClick={() => setFilters(DEFAULT_FILTERS)}>
+            Reset Filters
+          </Button>
+          {/* <Button
             variant="outlined"
             color='secondary'
             onClick={onExport}
             disabled={!filteredPools?.length}
-            sx={{ textTransform: 'none' }}
+            sx={{ textTransform: 'none', mx: '5px' }}
           >
             Export {filteredPools?.length ?? ''} Reward Ids
-          </Button>
+          </Button> */}
+          <ExportCalls api={api} rewardIds={rewardIds} />
         </Grid>
         {!filteredPools
           ?
@@ -259,7 +264,7 @@ function App() {
                   Metadata
                 </Grid>
                 <Grid item width='20%'>
-                  Depositor identity
+                  Owner identity
                 </Grid>
                 <Grid item width='7%'>
                   #Members
