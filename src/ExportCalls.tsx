@@ -25,7 +25,7 @@ function ExportCalls({ api, rewardIds }: Props): React.ReactElement<Props> {
     const reward = new BN(rewardAmountInDOT * 10 ** decimal);
 
     let call = api.tx.utility.batch(
-      rewardIds.map((a) => api.tx.balances.forceTransfer(COUNCIL_ADDRESS, a, reward))
+      rewardIds.map((a) => api.tx.treasury.spend(reward, a))
     );
     // call encoded
     console.log(call.toU8a());
