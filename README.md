@@ -1,5 +1,7 @@
-# Getting Started 
-This is a single web page to filter polkadot pools based on some filters such as pool members, identity, validators, etc.
+# Polkadot Nomination Pools Filtering 
+This is a web app to filter polkadot nomination (staking) pools based on filters such as the number of pool members, pool owner's identity, selected validators, etc. It is originaly designed to be used for rewarding pools (members) based on the post by Kian on [polkassembly](https://polkadot.polkassembly.io/post/1352).
+
+The filtered eligible list of pools to be rewarded by the treasury can be exported from the app. It is coded. To decode it use [polkadot js apps](https://polkadot.js.org/apps/#/extrinsics/decode)
 
 # ![Eligibility](./Screenshot.png)
 
